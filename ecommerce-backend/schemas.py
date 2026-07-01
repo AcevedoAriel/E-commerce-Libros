@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 # Propiedades comunes que usaremos al crear o leer un libro
 class LibroBase(BaseModel):
@@ -49,3 +50,14 @@ class UsuarioLogin(BaseModel):
 class ItemCarrito(BaseModel):
     LibroID: int
     Cantidad: int
+
+# Esquema para mostrar el historial de órdenes
+class OrdenResponse(BaseModel):
+    OrdenID: int
+    UsuarioID: int
+    FechaOrden: datetime
+    Total: float
+    Estado: str
+
+    class Config:
+        from_attributes = True

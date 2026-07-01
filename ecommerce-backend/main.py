@@ -175,3 +175,74 @@ def agregar_al_carrito(
     db.commit()
 
     return {"mensaje": "Producto agregado al carrito exitosamente", "orden_id": orden.OrdenID, "total_actual": orden.Total}
+
+# --- ENDPOINT PARA FINALIZAR LA COMPRA (CHECKOUT) ---
+@app.post("/carrito/checkout")
+def finalizar_compra(
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    usuario_id = usuario_actual.get("id")
+
+    # 1. Buscar la orden "Pendiente" del usuario (su carrito actual)
+    orden = db.query(models.Orden).filter(
+        models.Orden.UsuarioID == usuario_id,
+        models.Orden.Estado == 'Pendiente'
+    ).first()
+
+    if not orden:
+        raise HTTPException(status_code=400, detail="No tienes un carrito activo para procesar.")
+
+    # 2. Obtener todos los ítems agregados a este carrito
+    detalles = db.query(models.DetalleOrden).filter(models.DetalleOrden.OrdenID == orden.OrdenID).all()
+    
+    if not detalles:
+        raise HTTPException(status_code=400, detail="El carrito está vacío.")
+
+    # 3. Validar stock y descontar unidades
+    # Iteramos por cada artículo del detalle para asegurar la integridad de los datos
+    for item in detalles:
+        libro = db.query(models.Libro).filter(models.Libro.LibroID == item.LibroID).first()
+        
+        if not libro:
+            raise HTTPException(status_code=404, detail=f"El libro con ID {item.LibroID} ya no existe.")
+            
+        if libro.Stock < item.Cantidad:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error de stock de último momento: '{libro.Titulo}' solo tiene {libro.Stock} unidades disponibles."
+            )
+        
+        # Manipulación y actualización de datos: restamos el stock real
+        libro.Stock -= item.Cantidad
+
+    # 4. Cambiar el estado de la orden a 'Pagado'
+    orden.Estado = 'Pagado'
+    
+    # Confirmamos la transacción completa en la base de datos
+    db.commit()
+
+    return {
+        "mensaje": "¡Compra finalizada con éxito!",
+        "orden_id": orden.OrdenID,
+        "total_pagado": orden.Total,
+        "estado": orden.Estado
+    }
+
+# --- ENDPOINT PARA VER EL HISTORIAL DE COMPRAS ---
+@app.get("/ordenes/historial", response_model=List[schemas.OrdenResponse])
+def obtener_historial_ordenes(
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    # Extraemos el ID del usuario autenticado desde el token
+    usuario_id = usuario_actual.get("id")
+
+    # Ejecutamos la consulta filtrando por el UsuarioID y el Estado 'Pagado'
+    # Equivalente a: SELECT * FROM Ordenes WHERE UsuarioID = id AND Estado = 'Pagado'
+    historial = db.query(models.Orden).filter(
+        models.Orden.UsuarioID == usuario_id,
+        models.Orden.Estado == 'Pagado'
+    ).order_by(models.Orden.FechaOrden.desc()).all() # Las ordenamos de la más reciente a la más vieja
+
+    return historial
