@@ -38,3 +38,9 @@ class UsuarioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Esquema para iniciar sesión
+class UsuarioLogin(BaseModel):
+    Correo: str
+    Password: str

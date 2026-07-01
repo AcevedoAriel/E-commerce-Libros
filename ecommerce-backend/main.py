@@ -4,7 +4,7 @@ import models, schemas # <-- Agregamos schemas
 from database import engine, get_db
 from typing import List # <-- Para tipar listas de datos
 from fastapi import FastAPI, Depends, HTTPException
-from security import obtener_hash_password
+from security import obtener_hash_password, verificar_password, crear_token_acceso
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -92,3 +92,29 @@ def registrar_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(get_
     db.refresh(nuevo_usuario)
     
     return nuevo_usuario
+
+# --- ENDPOINT DE LOGIN ---
+@app.post("/login")
+def login(credenciales: schemas.UsuarioLogin, db: Session = Depends(get_db)):
+    # 1. Buscamos al usuario por su email
+    usuario = db.query(models.Usuario).filter(models.Usuario.Correo == credenciales.Correo).first()
+    
+    # Si no existe el usuario, lanzamos error
+    if not usuario:
+        raise HTTPException(status_code=400, detail="Correo o contraseña incorrectos")
+    
+    # 2. Verificamos que la contraseña coincida con el hash
+    if not verificar_password(credenciales.Password, usuario.PasswordHash):
+        raise HTTPException(status_code=400, detail="Correo o contraseña incorrectos")
+    
+    # 3. Si todo está bien, creamos el token
+    # Guardamos en el payload (cuerpo del token) el ID del usuario y su rol
+    datos_token = {
+        "sub": usuario.Correo,
+        "id": usuario.UsuarioID,
+        "es_admin": usuario.EsAdmin
+    }
+    token = crear_token_acceso(data=datos_token)
+    
+    # Devolvemos el token al cliente
+    return {"access_token": token, "token_type": "bearer"}
