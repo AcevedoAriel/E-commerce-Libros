@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, DateTime
+from datetime import datetime, timezone
 from database import Base
 
 class Libro(Base):
@@ -22,3 +23,20 @@ class Usuario(Base):
     PasswordHash = Column(String(256), nullable=False)
     FechaRegistro = Column(DateTime)
     EsAdmin = Column(Integer, default=0) # Usamos Integer porque SQL Server mapea BIT como 0 o 1
+
+class Orden(Base):
+    __tablename__ = "Ordenes"
+    OrdenID = Column(Integer, primary_key=True, index=True)
+    UsuarioID = Column(Integer, ForeignKey("Usuarios.UsuarioID"), nullable=False)
+    FechaOrden = Column(DateTime, default=datetime.utcnow)
+    Total = Column(Float, nullable=False, default=0.0)
+    Estado = Column(String(20), default='Pendiente')
+
+class DetalleOrden(Base):
+    __tablename__ = "DetalleOrdenes"
+
+    DetalleID = Column(Integer, primary_key=True, index=True)
+    OrdenID = Column(Integer, ForeignKey("Ordenes.OrdenID"), nullable=False)
+    LibroID = Column(Integer, ForeignKey("Libros.LibroID"), nullable=False)
+    Cantidad = Column(Integer, nullable=False)
+    PrecioUnitario = Column(Float, nullable=False)

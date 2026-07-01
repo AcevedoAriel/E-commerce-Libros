@@ -44,3 +44,8 @@ class UsuarioResponse(BaseModel):
 class UsuarioLogin(BaseModel):
     Correo: str
     Password: str
+
+# Esquema para agregar un producto al carrito
+class ItemCarrito(BaseModel):
+    LibroID: int
+    Cantidad: int

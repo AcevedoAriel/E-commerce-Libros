@@ -127,3 +127,51 @@ def login(credenciales: OAuth2PasswordRequestForm = Depends(), db: Session = Dep
     
     # Devolvemos el token al cliente
     return {"access_token": token, "token_type": "bearer"}
+
+# --- ENDPOINT PARA AGREGAR AL CARRITO ---
+@app.post("/carrito")
+def agregar_al_carrito(
+    item: schemas.ItemCarrito, 
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual) # Requerimos token válido
+):
+    usuario_id = usuario_actual.get("id")
+
+    # 1. Buscar si el usuario ya tiene una orden "Pendiente" (su carrito activo)
+    orden = db.query(models.Orden).filter(
+        models.Orden.UsuarioID == usuario_id,
+        models.Orden.Estado == 'Pendiente'
+    ).first()
+
+    # Si no tiene carrito activo, le creamos uno nuevo
+    if not orden:
+        orden = models.Orden(UsuarioID=usuario_id, Total=0.0, Estado='Pendiente')
+        db.add(orden)
+        db.commit()
+        db.refresh(orden)
+
+    # 2. Buscar el libro para verificar precio y stock
+    libro = db.query(models.Libro).filter(models.Libro.LibroID == item.LibroID).first()
+    
+    if not libro:
+        raise HTTPException(status_code=404, detail="El libro no existe")
+        
+    if libro.Stock < item.Cantidad:
+        raise HTTPException(status_code=400, detail=f"Stock insuficiente. Solo quedan {libro.Stock} unidades.")
+
+    # 3. Agregar el ítem al detalle de la orden
+    nuevo_detalle = models.DetalleOrden(
+        OrdenID=orden.OrdenID,
+        LibroID=item.LibroID,
+        Cantidad=item.Cantidad,
+        PrecioUnitario=libro.Precio # Guardamos el precio actual del libro
+    )
+    db.add(nuevo_detalle)
+
+    # 4. Actualizar el total de la cabecera de la Orden
+    orden.Total += (libro.Precio * item.Cantidad)
+    
+    # Guardamos toda la transacción
+    db.commit()
+
+    return {"mensaje": "Producto agregado al carrito exitosamente", "orden_id": orden.OrdenID, "total_actual": orden.Total}
