@@ -1,0 +1,24 @@
+from pydantic import BaseModel
+from typing import Optional
+
+# Propiedades comunes que usaremos al crear o leer un libro
+class LibroBase(BaseModel):
+    Titulo: str
+    Autor: str
+    Descripcion: Optional[str] = None
+    Precio: float
+    Stock: int = 0
+    ImagenURL: Optional[str] = None
+    CategoriaID: int
+
+# Esquema para cuando recibimos datos para crear un libro (POST)
+class LibroCreate(LibroBase):
+    pass
+
+# Esquema para cuando devolvemos un libro al cliente (GET)
+class Libro(LibroBase):
+    LibroID: int
+
+    # Esta configuración permite que Pydantic lea directamente los objetos de SQLAlchemy
+    class Config:
+        from_attributes = True
