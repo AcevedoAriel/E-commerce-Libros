@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 import models, schemas # <-- Agregamos schemas
 from database import engine, get_db
 from typing import List # <-- Para tipar listas de datos
-from fastapi import FastAPI, Depends, HTTPException
-from security import obtener_hash_password, verificar_password, crear_token_acceso
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from security import obtener_hash_password, verificar_password, crear_token_acceso, obtener_usuario_actual
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -21,17 +22,25 @@ def obtener_libros(db: Session = Depends(get_db)):
     libros = db.query(models.Libro).all()
     return libros
 
-# --- NUEVO ENDPOINT POST ---
+# --- ENDPOINT POST (Protegido) ---
 @app.post("/libros", response_model=schemas.Libro)
-def crear_libro(libro: schemas.LibroCreate, db: Session = Depends(get_db)):
-    # Convertimos los datos validados de Pydantic al modelo de SQLAlchemy
+def crear_libro(
+    libro: schemas.LibroCreate, 
+    db: Session = Depends(get_db),
+    # Al agregar esta línea, FastAPI exige un token válido para ejecutar la función
+    usuario_actual: dict = Depends(obtener_usuario_actual) 
+):
+    # Validamos que el usuario tenga rol de Administrador (EsAdmin = 1)
+    if usuario_actual.get("es_admin") != 1:
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos suficientes para realizar esta acción. Solo administradores."
+        )
+
+    # Si pasó la validación, creamos el libro normalmente
     nuevo_libro = models.Libro(**libro.model_dump())
-    
-    # Lo agregamos a la sesión y hacemos commit (como en SQL)
     db.add(nuevo_libro)
     db.commit()
-    
-    # Refrescamos para obtener el LibroID generado por la base de datos
     db.refresh(nuevo_libro) 
     return nuevo_libro
 
@@ -94,21 +103,21 @@ def registrar_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(get_
     return nuevo_usuario
 
 # --- ENDPOINT DE LOGIN ---
+# --- ENDPOINT DE LOGIN (ADAPTADO A SWAGGER) ---
 @app.post("/login")
-def login(credenciales: schemas.UsuarioLogin, db: Session = Depends(get_db)):
-    # 1. Buscamos al usuario por su email
-    usuario = db.query(models.Usuario).filter(models.Usuario.Correo == credenciales.Correo).first()
+def login(credenciales: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # 1. Buscamos al usuario usando .username (que es el mail que mandás en el formulario)
+    usuario = db.query(models.Usuario).filter(models.Usuario.Correo == credenciales.username).first()
     
     # Si no existe el usuario, lanzamos error
     if not usuario:
         raise HTTPException(status_code=400, detail="Correo o contraseña incorrectos")
     
-    # 2. Verificamos que la contraseña coincida con el hash
-    if not verificar_password(credenciales.Password, usuario.PasswordHash):
+    # 2. Verificamos la contraseña usando .password del formulario
+    if not verificar_password(credenciales.password, usuario.PasswordHash):
         raise HTTPException(status_code=400, detail="Correo o contraseña incorrectos")
     
     # 3. Si todo está bien, creamos el token
-    # Guardamos en el payload (cuerpo del token) el ID del usuario y su rol
     datos_token = {
         "sub": usuario.Correo,
         "id": usuario.UsuarioID,
