@@ -22,3 +22,19 @@ class Libro(LibroBase):
     # Esta configuración permite que Pydantic lea directamente los objetos de SQLAlchemy
     class Config:
         from_attributes = True
+
+# Esquema para registrar un nuevo usuario
+class UsuarioCreate(BaseModel):
+    Nombre: str
+    Correo: str
+    Password: str # El usuario envía su contraseña limpia, nosotros la encriptamos antes de guardarla
+
+# Esquema para responderle al cliente (Ocultamos el PasswordHash por seguridad)
+class UsuarioResponse(BaseModel):
+    UsuarioID: int
+    Nombre: str
+    Correo: str
+    EsAdmin: int
+
+    class Config:
+        from_attributes = True

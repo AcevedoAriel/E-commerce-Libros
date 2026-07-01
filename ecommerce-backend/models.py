@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float, DateTime
 from database import Base
 
 class Libro(Base):
@@ -12,3 +12,13 @@ class Libro(Base):
     Stock = Column(Integer, nullable=False, default=0)
     ImagenURL = Column(String(500))
     CategoriaID = Column(Integer)
+
+class Usuario(Base):
+    __tablename__ = "Usuarios"
+
+    UsuarioID = Column(Integer, primary_key=True, index=True)
+    Nombre = Column(String(100), nullable=False)
+    Correo = Column(String(150), unique=True, nullable=False, index=True)
+    PasswordHash = Column(String(256), nullable=False)
+    FechaRegistro = Column(DateTime)
+    EsAdmin = Column(Integer, default=0) # Usamos Integer porque SQL Server mapea BIT como 0 o 1

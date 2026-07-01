@@ -4,6 +4,7 @@ import models, schemas # <-- Agregamos schemas
 from database import engine, get_db
 from typing import List # <-- Para tipar listas de datos
 from fastapi import FastAPI, Depends, HTTPException
+from security import obtener_hash_password
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -66,3 +67,28 @@ def eliminar_libro(libro_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"mensaje": f"El libro con ID {libro_id} fue eliminado correctamente"}
+
+# --- ENDPOINT DE REGISTRO DE USUARIOS ---
+@app.post("/registro", response_model=schemas.UsuarioResponse)
+def registrar_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(get_db)):
+    # 1. Verificar si el email ya existe en la base de datos
+    usuario_existente = db.query(models.Usuario).filter(models.Usuario.Correo == usuario.Correo).first()
+    if usuario_existente:
+        raise HTTPException(status_code=400, detail="El email ya está registrado")
+    
+    # 2. Encriptar la contraseña recibida
+    password_encriptada = obtener_hash_password(usuario.Password)
+    
+    # 3. Crear el registro para la base de datos (Nota: Guardamos el PasswordHash, no el Password)
+    nuevo_usuario = models.Usuario(
+        Nombre=usuario.Nombre,
+        Correo=usuario.Correo,
+        PasswordHash=password_encriptada
+    )
+    
+    # 4. Guardar los cambios
+    db.add(nuevo_usuario)
+    db.commit()
+    db.refresh(nuevo_usuario)
+    
+    return nuevo_usuario
