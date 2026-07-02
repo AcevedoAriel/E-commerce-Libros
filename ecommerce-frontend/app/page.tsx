@@ -42,10 +42,10 @@ export default async function Home() {
               />
             </div>
 
-            <div className="p-4 flex flex-col flex-grow">
+            <div className="p-4 flex flex-col grow">
               <h2 className="text-xl font-semibold mb-2">{libro.Titulo}</h2>
               <p className="text-gray-600 mb-2">Por: {libro.Autor}</p>
-              <p className="text-sm text-gray-500 mb-4 flex-grow">{libro.Descripcion}</p>
+              <p className="text-sm text-gray-500 mb-4 grow">{libro.Descripcion}</p>
               
               <div className="flex justify-between items-center mb-4">
                 <span className="font-bold text-lg text-gray-900">${libro.Precio}</span>
@@ -59,7 +59,6 @@ export default async function Home() {
             
           </div>
         ))}
-        
       </div>
     </main>
   );
