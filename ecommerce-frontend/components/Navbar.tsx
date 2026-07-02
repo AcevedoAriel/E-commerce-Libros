@@ -7,8 +7,6 @@ import { useEffect, useState } from "react";
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false); 
-  
-  // NUEVO: Estado para guardar los datos que vienen de Python
   const [datosUsuario, setDatosUsuario] = useState<{Nombre: string, Rol: string} | null>(null);
   
   const pathname = usePathname(); 
@@ -17,7 +15,6 @@ export default function Navbar() {
     const token = localStorage.getItem("token");
     if (token) {
       setIsLoggedIn(true);
-      // Si hay token, disparamos la función para buscar el nombre
       obtenerDatosUsuario(token);
     } else {
       setIsLoggedIn(false);
@@ -26,7 +23,6 @@ export default function Navbar() {
     setMenuAbierto(false); 
   }, [pathname]);
 
-  // NUEVA FUNCIÓN: Llama al endpoint /usuarios/me
   const obtenerDatosUsuario = async (token: string) => {
     try {
       const respuesta = await fetch("http://127.0.0.1:8000/usuarios/me", {
@@ -72,15 +68,21 @@ export default function Navbar() {
           </svg>
         </button>
 
-        {/* Menú de Escritorio */}
+        {/* --- MENÚ DE ESCRITORIO --- */}
         <div className="hidden md:flex gap-4 items-center font-medium">
           {isLoggedIn ? (
             <>
-              {/* NUEVO: Etiqueta dinámica con el Nombre y Rol en pantallas grandes */}
               {datosUsuario && (
                 <span className="bg-blue-800 text-blue-100 px-4 py-1.5 rounded-full text-sm font-semibold mr-2 shadow-inner border border-blue-500">
                   {datosUsuario.Rol}: {datosUsuario.Nombre}
                 </span>
+              )}
+
+              {/* NUEVO BOTÓN: Solo se muestra si el rol es Administrador */}
+              {datosUsuario?.Rol === "Administrador" && (
+                <Link href="/admin" className="text-yellow-400 hover:text-yellow-300 font-bold transition mr-2 flex items-center gap-1">
+                  ⚙️ Panel Admin
+                </Link>
               )}
 
               <Link href="/historial" className="hover:text-gray-200 transition">
@@ -104,16 +106,22 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Menú Móvil */}
+      {/* --- MENÚ MÓVIL --- */}
       {menuAbierto && (
         <div className="absolute top-full left-0 w-full bg-blue-700 shadow-lg border-t border-blue-500 flex flex-col items-center py-2 md:hidden font-medium text-lg animate-fadeIn">
           {isLoggedIn ? (
             <>
-              {/* NUEVO: Etiqueta dinámica con el Nombre y Rol en celulares */}
               {datosUsuario && (
                 <div className="w-full text-center py-3 mb-2 bg-blue-800 text-blue-100 text-sm font-bold tracking-wide uppercase border-b border-blue-600">
                   {datosUsuario.Rol} • {datosUsuario.Nombre}
                 </div>
+              )}
+
+              {/* NUEVO BOTÓN: Solo se muestra si el rol es Administrador */}
+              {datosUsuario?.Rol === "Administrador" && (
+                <Link href="/admin" className="w-full text-center py-3 text-yellow-400 hover:bg-blue-800 transition font-bold border-b border-blue-600">
+                  ⚙️ Panel Admin
+                </Link>
               )}
               
               <Link href="/historial" className="w-full text-center py-3 hover:bg-blue-800 transition">
