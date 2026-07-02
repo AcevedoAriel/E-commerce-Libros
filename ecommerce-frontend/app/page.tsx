@@ -7,6 +7,7 @@ interface Libro {
   Descripcion: string;
   Precio: number;
   Stock: number;
+  ImagenURL: string;
 }
 
 async function getLibros(): Promise<Libro[]> {
@@ -35,7 +36,7 @@ export default async function Home() {
             
             <div className="w-full h-64 bg-gray-100 flex items-center justify-center border-b border-gray-200">
               <img 
-                src={`/portadas/${libro.LibroID}.jpg`} 
+                src={libro.ImagenURL} 
                 alt={`Portada de ${libro.Titulo}`}
                 className="w-full h-full object-contain p-2"
                 /* Eliminamos el evento onError para mantener la compatibilidad con el servidor */
