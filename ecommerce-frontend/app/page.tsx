@@ -1,3 +1,5 @@
+import BotonAgregar from "../components/BotonAgregar";
+
 // 1. Definimos la "Interface" para que TypeScript conozca la estructura de un Libro
 interface Libro {
   LibroID: number;
@@ -30,15 +32,18 @@ export default async function Home() {
         
         {/* Recorremos la lista de libros y creamos una tarjeta para cada uno */}
         {libros.map((libro) => (
-          <div key={libro.LibroID} className="border p-4 rounded shadow hover:shadow-lg transition">
+          <div key={libro.LibroID} className="border p-4 rounded shadow hover:shadow-lg transition flex flex-col">
             <h2 className="text-xl font-semibold mb-2">{libro.Titulo}</h2>
             <p className="text-gray-600 mb-2">Por: {libro.Autor}</p>
-            <p className="text-sm text-gray-500 mb-4">{libro.Descripcion}</p>
+            <p className="text-sm text-gray-500 mb-4 flex-grow">{libro.Descripcion}</p>
             
-            <div className="flex justify-between items-center mt-auto">
+            <div className="flex justify-between items-center mb-2">
               <span className="font-bold text-lg">${libro.Precio}</span>
-              <span className="text-xs bg-gray-200 px-2 py-1 rounded">Stock: {libro.Stock}</span>
+              <span className="text-xs bg-gray-200 px-2 py-1 rounded text-black">Stock: {libro.Stock}</span>
             </div>
+            
+            {/* Aquí inyectamos nuestro componente de cliente pasándole el ID */}
+            <BotonAgregar libroId={libro.LibroID} />
           </div>
         ))}
 

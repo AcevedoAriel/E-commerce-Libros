@@ -257,3 +257,38 @@ def obtener_historial_ordenes(
     ).order_by(models.Orden.FechaOrden.desc()).all() # Las ordenamos de la más reciente a la más vieja
 
     return historial
+
+# --- ENDPOINT PARA VER EL CARRITO ---
+@app.get("/carrito")
+def ver_carrito(
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    usuario_id = usuario_actual.get("id")
+
+    # Buscamos si hay una orden pendiente
+    orden = db.query(models.Orden).filter(
+        models.Orden.UsuarioID == usuario_id,
+        models.Orden.Estado == 'Pendiente'
+    ).first()
+
+    # Si no hay orden, devolvemos un carrito vacío
+    if not orden:
+        return {"Total": 0, "detalles": []}
+
+    # Si hay orden, buscamos los detalles y los cruzamos con los libros para tener el título
+    detalles = db.query(models.DetalleOrden).filter(models.DetalleOrden.OrdenID == orden.OrdenID).all()
+    
+    items_carrito = []
+    for item in detalles:
+        libro = db.query(models.Libro).filter(models.Libro.LibroID == item.LibroID).first()
+        if libro:
+            items_carrito.append({
+                "DetalleID": item.DetalleID,
+                "Titulo": libro.Titulo,
+                "Cantidad": item.Cantidad,
+                "PrecioUnitario": item.PrecioUnitario,
+                "Subtotal": item.Cantidad * item.PrecioUnitario
+            })
+
+    return {"Total": orden.Total, "detalles": items_carrito}
