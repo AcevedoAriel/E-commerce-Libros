@@ -367,3 +367,25 @@ def actualizar_cantidad(
     db.commit()
     
     return {"mensaje": "Cantidad actualizada correctamente"}
+
+# --- ENDPOINT PARA OBTENER DATOS DEL USUARIO LOGUEADO ---
+@app.get("/usuarios/me")
+def obtener_perfil(
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    usuario_id = usuario_actual.get("id")
+    
+    # Buscamos el usuario en la base de datos usando el ID del token
+    usuario = db.query(models.Usuario).filter(models.Usuario.UsuarioID == usuario_id).first()
+    
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Lógica condicional: Si EsAdmin es 1 (Verdadero), asignamos "Administrador". Si es 0 (Falso), "Cliente".
+    rol_usuario = "Administrador" if usuario.EsAdmin else "Cliente"
+        
+    return {
+        "Nombre": usuario.Nombre, 
+        "Rol": rol_usuario
+    }
