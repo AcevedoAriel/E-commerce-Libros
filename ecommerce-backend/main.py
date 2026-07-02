@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from security import obtener_hash_password, verificar_password, crear_token_acceso, obtener_usuario_actual
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -142,50 +143,67 @@ def login(credenciales: OAuth2PasswordRequestForm = Depends(), db: Session = Dep
 # --- ENDPOINT PARA AGREGAR AL CARRITO ---
 @app.post("/carrito")
 def agregar_al_carrito(
-    item: schemas.ItemCarrito, 
+    datos: dict, # Asumiendo que recibes un JSON con LibroID y Cantidad
     db: Session = Depends(get_db),
-    usuario_actual: dict = Depends(obtener_usuario_actual) # Requerimos token válido
+    usuario_actual: dict = Depends(obtener_usuario_actual)
 ):
     usuario_id = usuario_actual.get("id")
+    libro_id = datos.get("LibroID")
+    cantidad_a_agregar = datos.get("Cantidad", 1)
 
-    # 1. Buscar si el usuario ya tiene una orden "Pendiente" (su carrito activo)
+    # 1. Buscamos si el libro existe y tiene stock
+    libro = db.query(models.Libro).filter(models.Libro.LibroID == libro_id).first()
+    if not libro:
+        raise HTTPException(status_code=404, detail="Libro no encontrado")
+
+    # 2. Buscamos si el usuario ya tiene una orden 'Pendiente' (su carrito activo)
     orden = db.query(models.Orden).filter(
         models.Orden.UsuarioID == usuario_id,
         models.Orden.Estado == 'Pendiente'
     ).first()
 
-    # Si no tiene carrito activo, le creamos uno nuevo
+    # Si no tiene orden, se la creamos
     if not orden:
-        orden = models.Orden(UsuarioID=usuario_id, Total=0.0, Estado='Pendiente')
+        orden = models.Orden(UsuarioID=usuario_id, Total=0, Estado='Pendiente')
         db.add(orden)
         db.commit()
         db.refresh(orden)
 
-    # 2. Buscar el libro para verificar precio y stock
-    libro = db.query(models.Libro).filter(models.Libro.LibroID == item.LibroID).first()
-    
-    if not libro:
-        raise HTTPException(status_code=404, detail="El libro no existe")
+    # 3. LÓGICA DE AGRUPACIÓN: Buscamos si ese libro ya está en el detalle de la orden
+    detalle_existente = db.query(models.DetalleOrden).filter(
+        models.DetalleOrden.OrdenID == orden.OrdenID,
+        models.DetalleOrden.LibroID == libro_id
+    ).first()
+
+    if detalle_existente:
+        # Si ya existe en el carrito, verificamos que el stock alcance para sumar la nueva cantidad
+        nueva_cantidad_total = detalle_existente.Cantidad + cantidad_a_agregar
+        if libro.Stock < nueva_cantidad_total:
+            raise HTTPException(status_code=400, detail="No hay suficiente stock para agregar más unidades de este libro")
         
-    if libro.Stock < item.Cantidad:
-        raise HTTPException(status_code=400, detail=f"Stock insuficiente. Solo quedan {libro.Stock} unidades.")
+        # Le sumamos la cantidad a la fila que ya existe
+        detalle_existente.Cantidad = nueva_cantidad_total
+    else:
+        # Si no existe en el carrito, verificamos el stock y creamos una fila nueva
+        if libro.Stock < cantidad_a_agregar:
+            raise HTTPException(status_code=400, detail="Stock insuficiente")
+            
+        nuevo_detalle = models.DetalleOrden(
+            OrdenID=orden.OrdenID,
+            LibroID=libro_id,
+            Cantidad=cantidad_a_agregar,
+            PrecioUnitario=libro.Precio
+        )
+        db.add(nuevo_detalle)
 
-    # 3. Agregar el ítem al detalle de la orden
-    nuevo_detalle = models.DetalleOrden(
-        OrdenID=orden.OrdenID,
-        LibroID=item.LibroID,
-        Cantidad=item.Cantidad,
-        PrecioUnitario=libro.Precio # Guardamos el precio actual del libro
-    )
-    db.add(nuevo_detalle)
-
-    # 4. Actualizar el total de la cabecera de la Orden
-    orden.Total += (libro.Precio * item.Cantidad)
-    
-    # Guardamos toda la transacción
     db.commit()
 
-    return {"mensaje": "Producto agregado al carrito exitosamente", "orden_id": orden.OrdenID, "total_actual": orden.Total}
+    # 4. Recalculamos el total a pagar de la orden
+    todos_los_detalles = db.query(models.DetalleOrden).filter(models.DetalleOrden.OrdenID == orden.OrdenID).all()
+    orden.Total = sum([d.Cantidad * d.PrecioUnitario for d in todos_los_detalles])
+    db.commit()
+
+    return {"mensaje": "Producto agregado al carrito con éxito"}
 
 # --- ENDPOINT PARA FINALIZAR LA COMPRA (CHECKOUT) ---
 @app.post("/carrito/checkout")
@@ -292,3 +310,60 @@ def ver_carrito(
             })
 
     return {"Total": orden.Total, "detalles": items_carrito}
+
+# Esquema para recibir la nueva cantidad
+class NuevaCantidad(BaseModel):
+    Cantidad: int
+
+# --- ENDPOINT PARA VACIAR TODO EL CARRITO ---
+@app.delete("/carrito")
+def vaciar_carrito(
+    db: Session = Depends(get_db),
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    usuario_id = usuario_actual.get("id")
+    # Buscamos la orden pendiente del usuario
+    orden = db.query(models.Orden).filter(
+        models.Orden.UsuarioID == usuario_id, 
+        models.Orden.Estado == 'Pendiente'
+    ).first()
+    
+    if orden:
+        # Borramos todos los detalles asociados a esa orden
+        db.query(models.DetalleOrden).filter(models.DetalleOrden.OrdenID == orden.OrdenID).delete()
+        orden.Total = 0
+        db.commit()
+        
+    return {"mensaje": "Carrito vaciado exitosamente"}
+
+# --- ENDPOINT PARA CAMBIAR LA CANTIDAD DE UN LIBRO (+ / -) ---
+@app.put("/carrito/{detalle_id}")
+def actualizar_cantidad(
+    detalle_id: int, 
+    datos: NuevaCantidad, 
+    db: Session = Depends(get_db), 
+    usuario_actual: dict = Depends(obtener_usuario_actual)
+):
+    usuario_id = usuario_actual.get("id")
+    
+    # Buscamos el detalle específico que queremos modificar
+    detalle = db.query(models.DetalleOrden).filter(models.DetalleOrden.DetalleID == detalle_id).first()
+    if not detalle:
+        raise HTTPException(status_code=404, detail="Detalle no encontrado")
+        
+    orden = db.query(models.Orden).filter(models.Orden.OrdenID == detalle.OrdenID).first()
+
+    # Lógica central: si la cantidad llega a 0, eliminamos el libro del carrito
+    if datos.Cantidad <= 0:
+        db.delete(detalle)
+    else:
+        detalle.Cantidad = datos.Cantidad
+        
+    db.commit()
+    
+    # Recalculamos el total a pagar de la orden cruzando con el Precio Unitario
+    detalles_restantes = db.query(models.DetalleOrden).filter(models.DetalleOrden.OrdenID == orden.OrdenID).all()
+    orden.Total = sum([d.Cantidad * d.PrecioUnitario for d in detalles_restantes])
+    db.commit()
+    
+    return {"mensaje": "Cantidad actualizada correctamente"}

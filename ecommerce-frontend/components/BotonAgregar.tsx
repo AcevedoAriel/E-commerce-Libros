@@ -1,32 +1,33 @@
 "use client";
 
 import { useState } from "react";
+// 1. Importamos toast
+import toast from "react-hot-toast";
 
-// Definimos que el componente espera recibir el ID del libro
 export default function BotonAgregar({ libroId }: { libroId: number }) {
   const [cargando, setCargando] = useState(false);
 
   const agregarAlCarrito = async () => {
-    // 1. Buscamos el token de seguridad
     const token = localStorage.getItem("token");
     
     if (!token) {
-      alert("Por favor, inicia sesión para agregar productos al carrito.");
+      // Usamos un toast de error en lugar de alert
+      toast.error("Por favor, inicia sesión para agregar productos.");
       return;
     }
 
     setCargando(true);
 
+    // Opcional: mostrar un toast de "cargando" mientras espera a la base de datos
+    const toastId = toast.loading("Agregando al carrito...");
+
     try {
-      // 2. Enviamos la petición a FastAPI, inyectando el token en los Headers
       const respuesta = await fetch("http://127.0.0.1:8000/carrito", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Así es como enviamos la llave maestra al backend:
           "Authorization": `Bearer ${token}` 
         },
-        // Enviamos el ID del libro y asumimos que agrega 1 por defecto
         body: JSON.stringify({ LibroID: libroId, Cantidad: 1 }), 
       });
 
@@ -35,10 +36,16 @@ export default function BotonAgregar({ libroId }: { libroId: number }) {
         throw new Error(errorDatos.detail || "Error al agregar el producto");
       }
 
-      alert("¡Producto agregado al carrito con éxito!");
+      // Si todo sale bien, cambiamos el toast de carga por uno de éxito
+      toast.success("¡Producto agregado con éxito!", {
+        id: toastId,
+      });
 
     } catch (error: any) {
-      alert(error.message);
+      // Si falla, mostramos el error
+      toast.error(error.message, {
+        id: toastId,
+      });
     } finally {
       setCargando(false);
     }
