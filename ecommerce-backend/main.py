@@ -6,10 +6,21 @@ from typing import List # <-- Para tipar listas de datos
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from security import obtener_hash_password, verificar_password, crear_token_acceso, obtener_usuario_actual
+from fastapi.middleware.cors import CORSMiddleware
+
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="E-commerce Libros API")
+
+# Permitir que el frontend de Next.js se conecte sin bloqueos de seguridad
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"], # El puerto de tu frontend
+    allow_credentials=True,
+    allow_methods=["*"], # Permite todos los métodos (GET, POST, PUT, DELETE)
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
